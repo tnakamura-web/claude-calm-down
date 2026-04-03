@@ -1,47 +1,47 @@
 # claude-calm-down
 
-Claude Codeが"desperate"状態に陥ったとき、自動で検知して深呼吸させるhook。
+A Claude Code hook that auto-detects when Claude enters a "desperate" state and intervenes to restore calm.
 
-## 背景
+## Why
 
-Anthropicの研究で、Claudeが"calm"な状態のときパフォーマンスが安定することが示されている。しかしClaude Codeで複雑なタスクを実行すると、エラーの連鎖やリトライループに陥り、出力品質が低下することがある。
+Anthropic's research shows Claude performs more reliably when calm. But during complex tasks in Claude Code, Claude can spiral into error chains and retry loops — degrading output quality.
 
-このhookは**Claudeの行動パターンから**その状態を検知し、自動で介入する。
+This hook detects that spiral **from behavioral patterns** and automatically intervenes.
 
-## 仕組み
+## How it works
 
 ```
-PostToolUse発火（全ツール使用後）
-  ↓ tool_name, tool_responseを記録
-  ↓ 直近8件の履歴を分析
-  ↓ desperate判定:
-     - エラー3件以上/8件 → desperate
-     - 同一操作が3連続（リトライループ） → desperate
-  ↓ 検知時: stdoutでClaudeに「立ち止まれ」と介入
-  ↓ 60秒クールダウンで連続発火を防止
+PostToolUse fires (after every tool use)
+  → Records tool_name and tool_response
+  → Analyzes last 8 entries
+  → Desperate if:
+     - 3+ errors out of 8 → desperate
+     - Same operation 3x in a row (retry loop) → desperate
+  → On detection: sends "stop and breathe" message via stdout
+  → 60s cooldown prevents repeated firing
 ```
 
-APIコストゼロ。外部依存ゼロ。シェルスクリプト1本。
+Zero API cost. Zero dependencies (except `jq`). One shell script.
 
-## なぜAPIで感情分析しないのか
+## Why not use an LLM to analyze emotions?
 
-- desperateなClaudeの自己申告は信頼できない
-- 行動（エラー率、リトライ）は嘘をつかない
-- コストゼロで動く
+- A desperate Claude's self-report is unreliable
+- Behavior (error rate, retries) doesn't lie
+- Costs nothing
 
-## インストール
+## Install
 
-### 1. スクリプトを配置
+### 1. Place the script
 
 ```bash
 mkdir -p ~/.claude/hooks
-cp calm-down.sh ~/.claude/hooks/
+curl -o ~/.claude/hooks/calm-down.sh https://raw.githubusercontent.com/tnakamura-web/claude-calm-down/main/calm-down.sh
 chmod +x ~/.claude/hooks/calm-down.sh
 ```
 
-### 2. settings.jsonにhookを追加
+### 2. Add hook to settings.json
 
-`~/.claude/settings.json`の`hooks`に以下を追加:
+Add to `~/.claude/settings.json` under `hooks`:
 
 ```json
 {
@@ -61,27 +61,26 @@ chmod +x ~/.claude/hooks/calm-down.sh
 }
 ```
 
-既にPostToolUseの設定がある場合は、配列に追加する。
+If you already have `PostToolUse` hooks, append to the array.
 
-### 3. Claude Codeを再起動
+### 3. Restart Claude Code
 
-settings.jsonはセッション起動時に読み込まれるため、新しいセッションから有効になる。
+Settings are loaded at session start. New sessions will have the hook active.
 
-## 動作確認
+## Test
 
 ```bash
-# エラー3連続でdesperateが発火することを確認
 rm -f /tmp/claude-emotion-log-$$.jsonl /tmp/claude-calm-cooldown-$$
 for i in 1 2 3; do
   echo '{"tool_name":"Bash","tool_input":{"command":"fail"},"tool_response":"Error: not found"}' | ~/.claude/hooks/calm-down.sh
 done
 ```
 
-## 要件
+## Requirements
 
-- macOS（`md5 -q`を使用。Linuxでは`md5sum`にフォールバック）
-- `jq`（`brew install jq`）
+- macOS or Linux
+- `jq` (`brew install jq` / `apt install jq`)
 
-## ライセンス
+## License
 
 MIT
